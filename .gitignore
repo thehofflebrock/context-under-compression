@@ -1,0 +1,5 @@
+.env
+.env.*
+__pycache__/
+.sites-runtime/
+node_modules/
