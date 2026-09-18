@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {newRun,validateRun,countWords,STAGES,makePrompt,saveRecord,stale,stageReady,exportMarkdown,latest} from '../dist/core.js';
+const demo=JSON.parse(fs.readFileSync(new URL('../dist/demo.json',import.meta.url)));
+test('Pilot counts reproduce the evidence and Unicode counts exclude bullets',()=>{assert.equal(countWords(demo.baseline),247);assert.equal(countWords(latest(demo,'draft').text),227);assert.equal(countWords(latest(demo,'revision').text),248);assert.equal(countWords('• naïve co-op 2022 —'),3);});
+test('Brief persists at every stage and earlier responses remain immutable',()=>{const r=newRun();r.brief.sourceText='Captured evidence';for(const s of STAGES){const p=makePrompt(r,s);assert.match(p,/200–250/);assert.match(p,/Captured evidence/);saveRecord(r,s,'Response for '+s,'test',p);}const original=structuredClone(r.records.draft[0]);saveRecord(r,'draft','Changed draft','test',makePrompt(r,'draft'));assert.deepEqual(r.records.draft[0],original);assert.ok(stale(r,'review'));assert.equal(stageReady(r,'adjudication'),false);assert.throws(()=>makePrompt(r,'revision'),/previous stages/);});
+test('New human decision makes revision stale and reaches new prompt',()=>{const r=newRun();for(const s of STAGES)saveRecord(r,s,'Text','test',makePrompt(r,s));r.decisions.push({id:'d1',claim:'Remove promise',verdict:'accept',reason:'Unsupported'});assert.ok(stale(r,'revision'));assert.match(makePrompt(r,'revision'),/Remove promise/);});
+test('Import rejects malformed history and accepts replay record',()=>{assert.equal(validateRun(demo).id,demo.id);assert.throws(()=>validateRun({schemaVersion:1}),/not a workbench/);const r=newRun();r.records.draft=[{id:'x'}];assert.throws(()=>validateRun(r),/Invalid record/);});
+test('Export retains source constraints, originals and supplemental evidence',()=>{const md=exportMarkdown(demo);assert.match(md,/Original baseline/);assert.match(md,/guidedEditorialNote/);assert.match(md,/Exact submitted prompt/);assert.match(md,/248/);});
